@@ -1,0 +1,158 @@
+---
+- name: Testing connection
+  hosts: server
+  tasks:
+  - name: Ping
+    ansible.builtin.ping:
+- name: DNS
+  hosts: server
+  become: true
+  vars:
+    forwarders:
+    - 8.8.8.8
+    - 8.8.4.4
+    key:
+      file: "/etc/bind/rndc.key"
+      name: "rndc-key"
+    zones:
+      - name: srv.lan
+        type: master
+        reverse: 1.10.10
+        records:
+        - name: "@"
+          type: NS
+          value: "ns1.srv.lan."
+        - name: "@"
+          type: MX
+          value: "10 mail.srv.lan."
+        - name: "ns1"
+          type: A
+          value: 10.10.1.150
+        - name: 150
+          type: PTR
+          value: "ns1.srv.lan."
+        - name: "mail"
+          type: A
+          value: 10.10.1.150
+        - name: "pop3"
+          type: A
+          value: 10.10.1.250
+        - name: "imap"
+          type: A
+          value: 10.10.1.250
+        - name: "smtp"
+          type: A
+          value: 10.10.1.150
+      - name: clt.lan
+        type: master
+        reverse: 2.20.10
+        records:
+        - name: "@"
+          type: NS
+          value: "ns1.clt.lan."
+        - name: "ns1"
+          type: A
+          value: 10.20.2.150
+        - name: 150
+          type: PTR
+          value: "ns1.clt.lan."
+        - name: "mail"
+          type: A
+          value: 10.20.2.150
+        - name: "pop3"
+          type: A
+          value: 10.20.2.250
+        - name: "imap"
+          type: A
+          value: 10.20.2.250
+        - name: "smtp"
+          type: A
+          value: 10.20.2.150
+  tasks:
+  - name: "Installing bind9"
+    apt:
+      name: bind9
+      update_cache: true
+  - name: "Creating named.conf"
+    template:
+      src: templates/named.conf.j2
+      dest: /etc/bind/named.conf
+      owner: root
+      group: bind
+      mode: 0640
+  - name: "Creating database for {{ item.name }}"
+    template:
+      src: templates/db.j2
+      dest: "/var/cache/bind/forward.{{ item.name }}.db"
+      owner: root
+      group: bind
+      mode: 0660
+    loop: "{{ zones }}"
+  - name: "Creating reverse database for {{ item.name }}"
+    template:
+      src: templates/db.reverse.j2
+      dest: "/var/cache/bind/reverse.{{ item.name }}.db"
+      owner: root
+      group: bind
+      mode: 0660
+    loop: "{{ zones }}"
+    when: "item.reverse is defined"
+  - name: "Restarting bind9"
+    service:
+      name: "bind9"
+      state: restarted
+- name: DHCP
+  hosts: server
+  become: true
+  vars:
+    key:
+      file: "/etc/bind/rndc.key"
+      name: "rndc-key"
+    subnets:
+    - ip: 10.10.1.0
+      netmask: 255.255.255.0
+      interface: ens37
+      from: 10.10.1.11
+      to: 10.10.1.254
+      options:
+        domain_name_servers:
+          - 10.10.1.150
+        domain_name: srv.lan
+        reverse: 1.10.10
+        routers:
+        - 10.10.1.254
+    - ip: 10.20.2.0
+      netmask: 255.255.255.0
+      interface: ens34
+      from: 10.20.2.21
+      to: 10.20.2.254
+      options:
+        domain_name_servers:
+          - 10.20.2.150
+        domain_name: clt.lan
+        reverse: 2.20.10
+        routers:
+        - 10.20.2.254
+  tasks:
+  - name: "Installing isc-dhcp-server"
+    apt:
+      name: isc-dhcp-server
+      update_cache: true
+  - name: "Creating dhcpd.conf"
+    template:
+      src: templates/dhcpd.conf.j2
+      dest: "/etc/dhcp/dhcpd.conf"
+      owner: root
+      group: root
+      mode: 0644
+  - name: "Enabling interfaces"
+    template:
+      src: templates/dhcpd_default.j2
+      dest: "/etc/default/isc-dhcp-server"
+      owner: root
+      group: root
+      mode: 0644
+  - name: "Restarting the DHCP service"
+    service:
+      name: isc-dhcp-server
+      state: restarted

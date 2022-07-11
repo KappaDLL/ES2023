@@ -1,0 +1,34 @@
+options {
+    dnssec-validation auto;
+    directory "/var/cache/bind";
+    {% if forwarders is defined %}
+    forwarders {
+        {% for forwarder in forwarders %}
+        {{ forwarder }};
+        {% endfor %}
+    };
+    {% endif %}
+};
+
+{% set ddns = key is defined and key.file is defined and key.name is defined %}
+{% if ddns %}
+include "{{ key.file }}";
+{% endif %}
+
+
+{% for zone in zones %}
+zone "{{ zone.name }}" IN {
+    type {{ zone.type }};
+    file "/var/cache/bind/forward.{{ zone.name }}.db";
+    {% if ddns %}
+    allow-update { key {{ key.name }}; };
+    {% endif %}
+};
+zone "{{ zone.reverse }}.in-addr.arpa" IN {
+    type {{ zone.type }};
+    file "/var/cache/bind/reverse.{{ zone.name }}.db";
+    {% if ddns %}
+    allow-update { key {{ key.name }}; };
+    {% endif %}
+};
+{% endfor %}

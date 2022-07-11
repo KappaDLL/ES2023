@@ -1,0 +1,41 @@
+default-lease-time 600;
+max-lease-time 7200;
+
+{% set ddns = key is defined and key.file is defined and key.name is defined %}
+{% if ddns %}
+ddns-updates on;
+ddns-update-style interim;
+include "{{ key.file }}";
+{% else %}
+ddns-update-style none;
+{% endif %}
+
+{% for subnet in subnets %}
+subnet {{ subnet.ip }} netmask {{ subnet.netmask }} {
+    {% if subnet.interface is defined %}
+    interface {{ subnet.interface }};
+    {% endif %}
+    range {{ subnet.from }} {{ subnet.to }};
+    option domain-name-servers {% for dns_server in subnet.options.domain_name_servers %}
+    {{ dns_server }}
+    {% endfor %};
+    option domain-name "{{ subnet.options.domain_name }}";
+    option routers {% for router in subnet.options.routers %}
+    {{ router }}
+    {% endfor %};
+}
+{% if ddns %}
+{% if subnet.options is defined and subnet.options.domain_name is defined %}
+zone {{ subnet.options.domain_name }}. {
+    primary 127.0.0.1;
+    key {{ key.name }};
+}
+{% endif %}
+{% if subnet.options is defined and subnet.options.reverse is defined %}
+zone {{ subnet.options.reverse }}.in-addr.arpa. {
+    primary 127.0.0.1;
+    key {{ key.name }};
+}
+{% endif %}
+{% endif %}
+{% endfor %}
