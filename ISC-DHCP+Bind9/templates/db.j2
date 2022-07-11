@@ -1,0 +1,12 @@
+$TTL    604800
+@       IN      SOA     {{ item.name }}. root.{{ item.name }}. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+{% for zone_record in item.records %}
+{% if zone_record.type != "PTR" %}
+{{ zone_record.name }}  IN  {{ zone_record.type }}  {{ zone_record.value }}
+{% endif %}
+{% endfor %}

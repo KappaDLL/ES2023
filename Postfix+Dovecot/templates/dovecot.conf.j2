@@ -1,0 +1,5 @@
+!include_try /usr/share/dovecot/protocols.d/*.protocol
+listen = *, ::
+!include conf.d/*.conf
+protocols = imap pop3 lmtp
+!include_try local.conf
