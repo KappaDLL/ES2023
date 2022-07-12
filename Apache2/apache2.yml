@@ -1,0 +1,62 @@
+---
+- name: "Setting up Apache2"
+  hosts: server
+  become: true
+  vars_prompt:
+    - name: vhost_name
+      prompt: Enter a URL
+      default: srv.lan
+      private: no
+  vars:
+    apache2_pkgs:
+    - apache2
+    - openssl
+    - python3-openssl
+  tasks:
+  - name: "Installing Apache2"
+    apt:
+      name: "{{ item }}"
+      update_cache: true
+    loop: "{{ apache2_pkgs }}"
+  - name: "Creating a key for the self-signed certificate"
+    openssl_privatekey:
+      path: /etc/apache2/apache2-cert.key
+  - name: "Creating the self-signed certificate"
+    openssl_certificate:
+      path: /etc/apache2/apache2-cert.crt
+      privatekey_path: /etc/apache2/apache2-cert.key
+      provider: selfsigned
+  - name: "Creating the config file for {{ vhost_name }}"
+    template:
+      src: templates/vhost.conf.j2
+      dest: "/etc/apache2/sites-available/{{ vhost_name }}.conf"
+      mode: 0644
+      owner: root
+      group: root
+  - name: "Creating directory for {{ vhost_name }}"
+    file:
+      path: "/var/www/{{ vhost_name }}"
+      state: directory
+  - name: "Creating a basic index.html for {{ vhost_name }}"
+    template:
+      src: templates/index.html.j2
+      dest: "/var/www/{{ vhost_name }}/index.html"
+      mode: 0755
+      owner: root
+      group: root
+  - name: "Enabling Rewrite for Apache2"
+    community.general.apache2_module:
+      state: present
+      name: rewrite
+  - name: "Enabling SSL for Apache2"
+    community.general.apache2_module:
+      state: present
+      name: ssl
+  - name: "Enabling {{ vhost_name }}"
+    command: "a2ensite {{ vhost_name }}.conf"
+  - name: "Disabling the default site"
+    command: "a2dissite 000-default.conf"
+  - name: "Restarting Apache2"
+    service:
+      name: apache2
+      state: restarted
