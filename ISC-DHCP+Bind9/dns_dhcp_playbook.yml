@@ -53,6 +53,9 @@
         - name: "@"
           type: NS
           value: "ns1.clt.lan."
+        - name: "@"
+          type: MX
+          value: "10 mail.clt.lan."
         - name: "ns1"
           type: A
           value: 10.20.2.150
