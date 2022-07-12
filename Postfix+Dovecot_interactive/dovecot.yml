@@ -1,0 +1,74 @@
+---
+- name: "Setting up Dovecot"
+  hosts: dovecot
+  become: true
+  vars:
+    dovecot_pkgs:
+      - "dovecot-core"
+      - "dovecot-imapd"
+      - "dovecot-pop3d"
+      - "dovecot-lmtpd"
+    password: "{{ 'password123' | password_hash('sha512') }}"
+  vars_prompt:
+    - name: dovecot_srv_ip
+      prompt: Enter the IMAP/POP3 server's IP address
+      private: no
+    - name: usernames
+      prompt: Enter the usernames, separated by commas
+      private: no
+    - name: maildir_location
+      prompt: Where do you want to store the users' mails?
+      private: no
+      default: "~/Maildir"
+  tasks:
+  - set_fact:
+      users: "{{ usernames.split(',') }}"
+  - name: "Installing Dovecot"
+    apt:
+      name: "{{ item }}"
+      update_cache: true
+    loop: "{{ dovecot_pkgs }}"
+  - name: "Configuring dovecot.conf"
+    template:
+      src: templates/dovecot.conf.j2
+      dest: "/etc/dovecot/dovecot.conf"
+      mode: 0644
+      owner: root
+      group: root
+  - name: "Configuring 10-auth.conf"
+    template:
+      src: templates/10-auth.conf.j2
+      dest: "/etc/dovecot/conf.d/10-auth.conf"
+      mode: 0644
+      owner: root
+      group: root
+  - name: "Configuring 10-mail.conf"
+    template:
+      src: templates/10-mail.conf.j2
+      dest: "/etc/dovecot/conf.d/10-mail.conf"
+      mode: 0644
+      owner: root
+      group: root
+  - name: "Configuring 10-master.conf"
+    template:
+      src: templates/10-master.conf.j2
+      dest: "/etc/dovecot/conf.d/10-master.conf"
+      mode: 0644
+      owner: root
+      group: root
+  - name: "Creating groups"
+    ansible.builtin.group:
+      name: "{{ item }}"
+      state: present
+    loop: "{{ users }}"
+  - name: "Creating users"
+    user:
+      name: "{{ item }}"
+      password: "{{ password }}"
+      group: "{{ item }}"
+      state: present
+    loop: "{{ users }}"
+  - name: "Restarting dovecot"
+    service:
+      name: "dovecot"
+      state: "restarted"
