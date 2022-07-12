@@ -1,0 +1,69 @@
+---
+- name: "Setting up Postfix"
+  hosts: server
+  become: true
+  vars:
+    password: "{{ 'password123' | password_hash('sha512') }}"
+    postfix_pkgs:
+    - "postfix"
+    - "sasl2-bin"
+  vars_prompt:
+  - name: mail_owner
+    prompt: Enter the mail owner
+    default: postfix
+    private: no
+  - name: domain
+    prompt: Enter your domain name
+    default: domain.tld
+    private: no 
+  - name: hostname
+    prompt: Enter your hostname
+    default: mail.domain.tld
+    private: no
+  - name: subnet
+    prompt: Enter your subnet
+    private: no
+  - name: dovecot_srv_ip
+    prompt: Enter the IMAP/POP3 server's IP address
+    private: no
+  - name: usernames
+    prompt: Enter the usernames, separated by commas
+    private: no
+  tasks:
+  - set_fact:
+      users: "{{ usernames.split(',') }}"
+  - name: "Installing Postfix"
+    apt:
+      name: "{{ item }}"
+      update_cache: true
+    loop: "{{ postfix_pkgs }}"
+  - name: "Configuring main.cf"
+    template:
+      src: templates/main.cf.j2
+      dest: /etc/postfix/main.cf
+      mode: 0644
+      owner: root
+      group: root
+  - name: "Configuring master.cf"
+    template:
+      src: templates/master.cf.j2
+      dest: /etc/postfix/master.cf
+      mode: 0644
+      owner: root
+      group: root
+  - name: "Creating groups"
+    ansible.builtin.group:
+      name: "{{ item }}"
+      state: present
+    loop: "{{ users }}"
+  - name: "Creating users"
+    user:
+      name: "{{ item }}"
+      group: "{{ item }}"
+      password: "{{ password }}"
+      state: present
+    loop: "{{ users }}"
+  - name: "Restarting Postfix"
+    service:
+      name: "postfix"
+      state: "reloaded"
